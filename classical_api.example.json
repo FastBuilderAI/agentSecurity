@@ -1,0 +1,101 @@
+{
+  "version": "1.1.0",
+  "trust_stores": [
+    {
+      "id": "corp-root-2025",
+      "description": "Corporate Root & intermediates",
+      "ca_bundle_ref": { "ref": "CORP_CA_BUNDLE_PEM", "source": "env" },
+      "pinset": {
+        "type": "spki_sha256",
+        "hashes": ["4A5F2F4C1B6E0D4A5F2F4C1B6E0D4A5F2F4C1B6E0D4A5F2F4C1B6E0D4A5F2F4"],
+        "backup_hashes": ["9C1134B2D0F7AA9C1134B2D0F7AA9C1134B2D0F7AA9C1134B2D0F7AA9C1134B2"]
+      }
+    }
+  ],
+  "endpoints": [
+    {
+      "id": "payments.v2",
+      "name": "Payments API",
+      "kind": "classical_api",
+      "transport": {
+        "protocol": "https",
+        "base_url": "https://api.payments.example.com/v2",
+        "tls": {
+          "min_tls_version": "1.3",
+          "trust_store_ref": "corp-root-2025",
+          "client_cert_ref": { "ref": "PAY_CLIENT_CERT_PEM", "source": "vault", "format": "PEM" },
+          "client_key_ref": { "ref": "PAY_CLIENT_KEY_KMS", "source": "kms" },
+          "alpn_protocols": ["h2","http/1.1"],
+          "ocsp_stapling_required": true
+        }
+      },
+      "security_set": {
+        "mode": "all",
+        "schemes": [
+          {
+            "type": "oauth2",
+            "oauth2": {
+              "flow": "client_credentials",
+              "token_endpoint": "https://auth.payments.example.com/oauth2/token",
+              "scopes": ["payments:write"],
+              "client_id_ref": { "ref": "PAY_CLIENT_ID", "source": "env" },
+              "client_secret_ref": { "ref": "PAY_CLIENT_SECRET", "source": "env" },
+              "mtls_bound": {
+                "token_endpoint_auth_method": "tls_client_auth",
+                "tls_client_auth_subject_dn": "CN=fastagent-pay-client,O=Corp Ltd,C=US",
+                "client_cert_ref": { "ref": "PAY_CLIENT_CERT_PEM", "source": "vault", "format": "PEM" },
+                "client_key_ref": { "ref": "PAY_CLIENT_KEY_KMS", "source": "kms" },
+                "trust_store_ref": "corp-root-2025"
+              },
+              "dpop": {
+                "key_ref": { "ref": "PAY_DPOP_EC_KEY", "source": "vault", "format": "JWK" },
+                "alg": "ES256"
+              }
+            }
+          },
+          {
+            "type": "mtls",
+            "mtls": {
+              "client_cert_ref": { "ref": "PAY_CLIENT_CERT_PEM", "source": "vault", "format": "PEM" },
+              "client_key_ref": { "ref": "PAY_CLIENT_KEY_KMS", "source": "kms" },
+              "trust_store_ref": "corp-root-2025"
+            }
+          }
+        ]
+      },
+      "timeouts": { "connect_ms": 2500, "read_ms": 15000 },
+      "retries": { "max_attempts": 2 },
+      "config": {
+        "requests": [
+          {
+            "operation_id": "create_charge",
+            "summary": "Create a charge",
+            "method": "POST",
+            "path": "/charges",
+            "headers": {
+              "Idempotency-Key": { "from_context": "idempotency_key", "required": false }
+            },
+            "body": {
+              "content_type": "application/json",
+              "schema": {
+                "type": "object",
+                "required": ["amount","currency","source"],
+                "properties": {
+                  "amount": { "type": "integer", "minimum": 1 },
+                  "currency": { "type": "string" },
+                  "source": { "type": "string" },
+                  "description": { "type": "string" }
+                }
+              }
+            },
+            "response": {
+              "expected_status": [200,201],
+              "schema": { "type": "object", "properties": { "id": { "type": "string" }, "status": { "type": "string" } } }
+            },
+            "idempotency": { "enabled": true, "generator": "uuid4" }
+          }
+        ]
+      }
+    }
+  ]
+}

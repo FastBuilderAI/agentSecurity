@@ -1,0 +1,17 @@
+{
+  "name": "fastagent-security-schema",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test:js": "node tests/ajv-validate.js",
+    "test:ts": "tsx tests/ajv-validate.ts",
+    "test": "npm run test:js && npm run test:ts"
+  },
+  "devDependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3"
+  }
+}

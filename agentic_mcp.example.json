@@ -1,0 +1,57 @@
+{
+  "version": "1.1.0",
+  "trust_stores": [
+    {
+      "id": "corp-root-2025",
+      "ca_bundle_ref": { "ref": "CORP_CA_BUNDLE_PEM", "source": "env" }
+    }
+  ],
+  "endpoints": [
+    {
+      "id": "mcp.researcher",
+      "name": "Research MCP",
+      "kind": "agentic_mcp",
+      "transport": {
+        "protocol": "wss",
+        "base_url": "wss://mcp.corp.example/ws",
+        "tls": {
+          "min_tls_version": "1.2",
+          "trust_store_ref": "corp-root-2025",
+          "client_cert_ref": { "ref": "MCP_CLIENT_P12", "source": "vault", "format": "PKCS12", "passphrase_ref": { "ref": "MCP_CLIENT_P12_PW", "source": "vault" } }
+        }
+      },
+      "security": {
+        "type": "mtls",
+        "mtls": {
+          "client_cert_ref": { "ref": "MCP_CLIENT_P12", "source": "vault", "format": "PKCS12", "passphrase_ref": { "ref": "MCP_CLIENT_P12_PW", "source": "vault" } },
+          "trust_store_ref": "corp-root-2025"
+        }
+      },
+      "timeouts": { "connect_ms": 5000, "read_ms": 60000, "overall_ms": 180000 },
+      "config": {
+        "server": {
+          "transport": "websocket",
+          "url": "wss://mcp.corp.example/ws",
+          "protocol_version": "2024-11-07"
+        },
+        "model": {
+          "name": "gpt-4.1-mini",
+          "provider": "openai",
+          "context_window_tokens": 128000,
+          "max_output_tokens": 4000,
+          "temperature": 0.2
+        },
+        "tools": [
+          {
+            "name": "search",
+            "description": "Internal corp search",
+            "input_schema": { "type": "object", "required": ["q"], "properties": { "q": { "type": "string" } } },
+            "rate_limit": { "rps": 2, "burst": 5 }
+          }
+        ],
+        "routing": { "allow_tool_use": true, "max_parallel_tools": 2, "tool_choice": "auto" },
+        "streaming": { "enabled": true, "protocol": "mcp-stream" }
+      }
+    }
+  ]
+}

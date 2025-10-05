@@ -1,0 +1,618 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fastagent.dev/schemas/backend-endpoints.schema.json",
+  "title": "FastAgent External Backend Endpoints",
+  "type": "object",
+  "required": ["endpoints"],
+  "properties": {
+    "version": { "type": "string", "default": "1.1.0" },
+    "trust_stores": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/TrustStore" }
+    },
+    "endpoints": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Endpoint" },
+      "minItems": 1
+    }
+  },
+  "$defs": {
+    "Endpoint": {
+      "type": "object",
+      "required": ["id", "name", "kind", "transport", "timeouts", "config"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z0-9._-]+$" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "kind": { "type": "string", "enum": ["classical_api", "agentic_mcp"] },
+        "transport": {
+          "type": "object",
+          "required": ["protocol"],
+          "properties": {
+            "protocol": { "type": "string", "enum": ["http", "https", "ws", "wss", "grpc", "grpcs"] },
+            "base_url": { "type": "string", "format": "uri" },
+            "grpc_package": { "type": "string" },
+            "tls": {
+              "type": "object",
+              "properties": {
+                "verify_peer": { "type": "boolean", "default": true },
+                "min_tls_version": { "type": "string", "enum": ["1.2", "1.3"], "default": "1.2" },
+                "server_name": { "type": "string" },
+                "alpn_protocols": { "type": "array", "items": { "type": "string" } },
+                "cipher_suites": { "type": "array", "items": { "type": "string" } },
+                "ocsp_stapling_required": { "type": "boolean", "default": false },
+                "trust_store_ref": { "type": "string" },
+                "ca_bundle_ref": { "$ref": "#/$defs/SecretRef" },
+                "pinset": { "$ref": "#/$defs/PinSet" },
+                "client_cert_ref": { "$ref": "#/$defs/KeyMaterialRef" },
+                "client_key_ref": { "$ref": "#/$defs/KeyMaterialRef" }
+              },
+              "additionalProperties": false
+            },
+            "proxy": {
+              "type": "object",
+              "properties": {
+                "http_proxy": { "type": "string", "format": "uri" },
+                "https_proxy": { "type": "string", "format": "uri" },
+                "no_proxy": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+
+        "security": { "$ref": "#/$defs/SecurityScheme" },
+        "security_set": { "$ref": "#/$defs/SecuritySet" },
+
+        "timeouts": {
+          "type": "object",
+          "properties": {
+            "connect_ms": { "type": "integer", "minimum": 0, "default": 5000 },
+            "read_ms": { "type": "integer", "minimum": 0, "default": 30000 },
+            "overall_ms": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": false
+        },
+        "retries": {
+          "type": "object",
+          "properties": {
+            "max_attempts": { "type": "integer", "minimum": 0, "default": 2 },
+            "backoff": {
+              "type": "object",
+              "properties": {
+                "strategy": { "type": "string", "enum": ["none", "fixed", "exponential", "jittered"], "default": "exponential" },
+                "initial_ms": { "type": "integer", "minimum": 0, "default": 200 },
+                "max_ms": { "type": "integer", "minimum": 0, "default": 5000 }
+              },
+              "additionalProperties": false
+            },
+            "retry_on": {
+              "type": "object",
+              "properties": {
+                "http_statuses": {
+                  "type": "array",
+                  "items": { "type": "integer", "minimum": 100, "maximum": 599 },
+                  "default": [408, 429, 500, 502, 503, 504]
+                },
+                "network_errors": { "type": "boolean", "default": true },
+                "idempotent_methods_only": { "type": "boolean", "default": true }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "rate_limit": {
+          "type": "object",
+          "properties": {
+            "requests_per_minute": { "type": "integer", "minimum": 1 },
+            "burst": { "type": "integer", "minimum": 1 },
+            "token_bucket_ref": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "observability": {
+          "type": "object",
+          "properties": {
+            "log_level": { "type": "string", "enum": ["trace", "debug", "info", "warn", "error"], "default": "info" },
+            "redact_headers": { "type": "array", "items": { "type": "string" } },
+            "trace": {
+              "type": "object",
+              "properties": {
+                "enabled": { "type": "boolean", "default": false },
+                "propagation": { "type": "string", "enum": ["w3c_traceparent", "b3_multi", "b3_single"], "default": "w3c_traceparent" }
+              },
+              "additionalProperties": false
+            },
+            "metrics": {
+              "type": "object",
+              "properties": {
+                "enabled": { "type": "boolean", "default": true },
+                "namespace": { "type": "string" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "cache": {
+          "type": "object",
+          "properties": {
+            "strategy": { "type": "string", "enum": ["none", "in_memory", "redis"], "default": "none" },
+            "ttl_ms": { "type": "integer", "minimum": 0 },
+            "key_template": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "config": {
+          "oneOf": [
+            { "$ref": "#/$defs/ClassicalApiConfig" },
+            { "$ref": "#/$defs/AgenticMcpConfig" }
+          ]
+        },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "enabled": { "type": "boolean", "default": true }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "classical_api" } } },
+          "then": { "properties": { "config": { "$ref": "#/$defs/ClassicalApiConfig" } } }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "agentic_mcp" } } },
+          "then": { "properties": { "config": { "$ref": "#/$defs/AgenticMcpConfig" } } }
+        },
+        {
+          "if": { "required": ["security_set"] },
+          "then": { "not": { "required": ["security"] } }
+        }
+      ]
+    },
+
+    "SecretRef": {
+      "type": "object",
+      "required": ["ref"],
+      "properties": {
+        "ref": { "type": "string" },
+        "source": { "type": "string", "enum": ["env", "vault", "file", "kms"], "default": "env" },
+        "key": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+
+    "KeyMaterialRef": {
+      "type": "object",
+      "required": ["ref"],
+      "properties": {
+        "ref": { "type": "string" },
+        "source": { "type": "string", "enum": ["env", "vault", "file", "kms", "hsm"], "default": "env" },
+        "format": { "type": "string", "enum": ["PEM", "PKCS12", "JWK", "DER"] },
+        "passphrase_ref": { "$ref": "#/$defs/SecretRef" }
+      },
+      "additionalProperties": false
+    },
+
+    "TrustStore": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z0-9._-]+$" },
+        "description": { "type": "string" },
+        "ca_bundle_ref": { "$ref": "#/$defs/SecretRef" },
+        "allowed_dns_names": { "type": "array", "items": { "type": "string" } },
+        "pinset": { "$ref": "#/$defs/PinSet" }
+      },
+      "additionalProperties": false
+    },
+
+    "PinSet": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["spki_sha256", "cert_sha256"], "default": "spki_sha256" },
+        "hashes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "pattern": "^[A-Fa-f0-9]{64}$" }
+        },
+        "backup_hashes": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[A-Fa-f0-9]{64}$" }
+        },
+        "enforce": { "type": "boolean", "default": true }
+      },
+      "additionalProperties": false
+    },
+
+    "SecuritySet": {
+      "type": "object",
+      "required": ["mode", "schemes"],
+      "properties": {
+        "mode": { "type": "string", "enum": ["all", "any"], "default": "all" },
+        "schemes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/SecurityScheme" }
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "SecurityScheme": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["none", "api_key", "basic", "bearer", "oauth2", "hmac", "sigv4", "mtls", "custom", "jwt"]
+        },
+        "api_key": {
+          "type": "object",
+          "properties": {
+            "in": { "type": "string", "enum": ["header", "query", "cookie"], "default": "header" },
+            "name": { "type": "string", "default": "Authorization" },
+            "prefix": { "type": "string", "default": "Bearer " },
+            "value_ref": { "$ref": "#/$defs/SecretRef" }
+          },
+          "additionalProperties": false
+        },
+        "basic": {
+          "type": "object",
+          "properties": {
+            "username_ref": { "$ref": "#/$defs/SecretRef" },
+            "password_ref": { "$ref": "#/$defs/SecretRef" }
+          },
+          "additionalProperties": false
+        },
+        "bearer": {
+          "type": "object",
+          "properties": {
+            "token_ref": { "$ref": "#/$defs/SecretRef" },
+            "prefix": { "type": "string", "default": "Bearer " }
+          },
+          "additionalProperties": false
+        },
+        "oauth2": {
+          "type": "object",
+          "required": ["flow", "token_endpoint"],
+          "properties": {
+            "flow": { "type": "string", "enum": ["client_credentials", "authorization_code", "password", "device_code"], "default": "client_credentials" },
+            "token_endpoint": { "type": "string", "format": "uri" },
+            "scopes": { "type": "array", "items": { "type": "string" } },
+            "client_id_ref": { "$ref": "#/$defs/SecretRef" },
+            "client_secret_ref": { "$ref": "#/$defs/SecretRef" },
+            "audience": { "type": "string" },
+            "refresh_leeway_s": { "type": "integer", "minimum": 0, "default": 60 },
+            "mtls_bound": {
+              "type": "object",
+              "properties": {
+                "token_endpoint_auth_method": { "type": "string", "enum": ["tls_client_auth", "self_signed_tls_client_auth"] },
+                "tls_client_auth_subject_dn": { "type": "string" },
+                "client_cert_ref": { "$ref": "#/$defs/KeyMaterialRef" },
+                "client_key_ref": { "$ref": "#/$defs/KeyMaterialRef" },
+                "trust_store_ref": { "type": "string" },
+                "ca_bundle_ref": { "$ref": "#/$defs/SecretRef" }
+              },
+              "additionalProperties": false
+            },
+            "dpop": {
+              "type": "object",
+              "properties": {
+                "key_ref": { "$ref": "#/$defs/KeyMaterialRef" },
+                "alg": { "type": "string", "default": "ES256" },
+                "htm_header": { "type": "string" }
+              },
+              "additionalProperties": false
+            },
+            "jwt_client_auth": {
+              "type": "object",
+              "properties": {
+                "audience": { "type": "string" },
+                "issuer": { "type": "string" },
+                "subject": { "type": "string" },
+                "signing_key_ref": { "$ref": "#/$defs/KeyMaterialRef" },
+                "alg": { "type": "string", "default": "RS256" },
+                "jwks_uri": { "type": "string", "format": "uri" }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "hmac": {
+          "type": "object",
+          "properties": {
+            "algorithm": { "type": "string", "enum": ["HMAC-SHA256", "HMAC-SHA1"], "default": "HMAC-SHA256" },
+            "key_ref": { "$ref": "#/$defs/SecretRef" },
+            "header_name": { "type": "string", "default": "X-Signature" },
+            "signing_template": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "sigv4": {
+          "type": "object",
+          "properties": {
+            "access_key_ref": { "$ref": "#/$defs/SecretRef" },
+            "secret_key_ref": { "$ref": "#/$defs/SecretRef" },
+            "region": { "type": "string" },
+            "service": { "type": "string" },
+            "session_token_ref": { "$ref": "#/$defs/SecretRef" }
+          },
+          "additionalProperties": false
+        },
+        "mtls": {
+          "type": "object",
+          "properties": {
+            "client_cert_ref": { "$ref": "#/$defs/KeyMaterialRef" },
+            "client_key_ref": { "$ref": "#/$defs/KeyMaterialRef" },
+            "trust_store_ref": { "type": "string" },
+            "ca_bundle_ref": { "$ref": "#/$defs/SecretRef" },
+            "pinset": { "$ref": "#/$defs/PinSet" },
+            "require_issuer_dn": { "type": "string" },
+            "require_subject_dn": { "type": "string" },
+            "require_san_dns": { "type": "array", "items": { "type": "string" } }
+          },
+          "additionalProperties": false
+        },
+        "jwt": {
+          "type": "object",
+          "properties": {
+            "bearer_in": { "type": "string", "enum": ["header","cookie"], "default": "header" },
+            "header_name": { "type": "string", "default": "Authorization" },
+            "prefix": { "type": "string", "default": "Bearer " },
+            "token_ref": { "$ref": "#/$defs/SecretRef" },
+            "jwks_uri": { "type": "string", "format": "uri" },
+            "issuer": { "type": "string" },
+            "audience": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "custom": {
+          "type": "object",
+          "properties": {
+            "hook": { "type": "string" },
+            "params": { "type": "object", "additionalProperties": true }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "ClassicalApiConfig": {
+      "type": "object",
+      "required": ["requests"],
+      "properties": {
+        "requests": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ApiOperation" },
+          "minItems": 1
+        },
+        "error_mapping": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["match"],
+            "properties": {
+              "match": {
+                "type": "object",
+                "properties": {
+                  "status": { "type": "integer", "minimum": 100, "maximum": 599 },
+                  "body_jsonpath": { "type": "string" },
+                  "header_name": { "type": "string" },
+                  "header_value_regex": { "type": "string" }
+                },
+                "additionalProperties": false
+              },
+              "fastagent_error": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "ApiOperation": {
+      "type": "object",
+      "required": ["operation_id", "method", "path"],
+      "properties": {
+        "operation_id": { "type": "string", "pattern": "^[a-zA-Z0-9._-]+$" },
+        "summary": { "type": "string" },
+        "method": { "type": "string", "enum": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"] },
+        "path": { "type": "string" },
+        "path_params": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/Parameter" }
+        },
+        "query": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/Parameter" }
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/Parameter" }
+        },
+        "body": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["content_type"],
+              "properties": {
+                "content_type": { "type": "string", "enum": ["application/json", "application/x-www-form-urlencoded", "multipart/form-data", "text/plain", "application/octet-stream"] },
+                "schema": { "type": "object" }
+              },
+              "additionalProperties": false
+            }
+          ]
+        },
+        "response": {
+          "type": "object",
+          "properties": {
+            "expected_status": {
+              "type": "array",
+              "items": { "type": "integer", "minimum": 100, "maximum": 599 },
+              "default": [200]
+            },
+            "schema": { "type": "object" }
+          },
+          "additionalProperties": false
+        },
+        "pagination": {
+          "type": "object",
+          "properties": {
+            "strategy": { "type": "string", "enum": ["none", "query_page", "cursor", "link_header"], "default": "none" },
+            "param_names": {
+              "type": "object",
+              "properties": {
+                "page": { "type": "string", "default": "page" },
+                "per_page": { "type": "string", "default": "per_page" },
+                "cursor": { "type": "string", "default": "cursor" },
+                "limit": { "type": "string", "default": "limit" }
+              },
+              "additionalProperties": false
+            },
+            "response_paths": {
+              "type": "object",
+              "properties": {
+                "next_cursor_jsonpath": { "type": "string" },
+                "items_jsonpath": { "type": "string" },
+                "link_rel_next_header": { "type": "string", "default": "Link" }
+              },
+              "additionalProperties": false
+            },
+            "max_pages": { "type": "integer", "minimum": 1, "default": 10 }
+          },
+          "additionalProperties": false
+        },
+        "idempotency": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean", "default": false },
+            "header_name": { "type": "string", "default": "Idempotency-Key" },
+            "generator": { "type": "string", "enum": ["uuid4", "hash_body", "custom"], "default": "uuid4" }
+          },
+          "additionalProperties": false
+        },
+        "streaming": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean", "default": false },
+            "mode": { "type": "string", "enum": ["sse", "chunked"] },
+            "event_field_jsonpath": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+
+    "Parameter": {
+      "type": "object",
+      "properties": {
+        "style": { "type": "string", "enum": ["simple", "form", "spaceDelimited", "pipeDelimited"], "default": "form" },
+        "explode": { "type": "boolean", "default": true },
+        "required": { "type": "boolean", "default": false },
+        "value": { "oneOf": [{ "type": "string" }, { "type": "number" }, { "type": "boolean" }, { "type": "array", "items": {} }] },
+        "from_context": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+
+    "AgenticMcpConfig": {
+      "type": "object",
+      "required": ["server"],
+      "properties": {
+        "server": {
+          "type": "object",
+          "required": ["transport"],
+          "properties": {
+            "transport": { "type": "string", "enum": ["stdio", "sse", "websocket"] },
+            "url": { "type": "string", "format": "uri" },
+            "command": { "type": "string" },
+            "args": { "type": "array", "items": { "type": "string" } },
+            "env": {
+              "type": "object",
+              "additionalProperties": { "oneOf": [{ "type": "string" }, { "$ref": "#/$defs/SecretRef" }] }
+            },
+            "protocol_version": { "type": "string", "default": "2024-11-07" }
+          },
+          "additionalProperties": false
+        },
+        "model": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "provider": { "type": "string" },
+            "context_window_tokens": { "type": "integer", "minimum": 0 },
+            "max_output_tokens": { "type": "integer", "minimum": 1 },
+            "temperature": { "type": "number", "minimum": 0 },
+            "top_p": { "type": "number", "minimum": 0, "maximum": 1 }
+          },
+          "additionalProperties": false
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "description": { "type": "string" },
+              "input_schema": { "type": "object" },
+              "rate_limit": {
+                "type": "object",
+                "properties": {
+                  "rpm": { "type": "integer", "minimum": 1 },
+                  "rps": { "type": "integer", "minimum": 1 },
+                  "burst": { "type": "integer", "minimum": 1 }
+                },
+                "additionalProperties": false
+              },
+              "allowed": { "type": "boolean", "default": true }
+            },
+            "additionalProperties": false
+          }
+        },
+        "routing": {
+          "type": "object",
+          "properties": {
+            "allow_tool_use": { "type": "boolean", "default": true },
+            "max_parallel_tools": { "type": "integer", "minimum": 1, "default": 1 },
+            "tool_choice": { "type": "string", "enum": ["auto", "required", "none"], "default": "auto" },
+            "fallback_chain": { "type": "array", "items": { "type": "string" } }
+          },
+          "additionalProperties": false
+        },
+        "session": {
+          "type": "object",
+          "properties": {
+            "system_prompt": { "type": "string" },
+            "memory": { "type": "string", "enum": ["none", "ephemeral", "persistent"], "default": "ephemeral" },
+            "embeddings_endpoint_id": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "streaming": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean", "default": true },
+            "protocol": { "type": "string", "enum": ["mcp-stream", "sse", "websocket"] }
+          },
+          "additionalProperties": false
+        },
+        "schema_contract": {
+          "type": "object",
+          "properties": {
+            "input_schema": { "type": "object" },
+            "output_schema": { "type": "object" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
